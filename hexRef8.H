@@ -22,18 +22,35 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::hexRef8
-
-Description
-    Refinement of (split) hexes using polyTopoChange.
+    Foam::hexRef2D
 
 SourceFiles
-    hexRef8.C
+    hexRef2D.C
+
+Author
+    Oleg Sutyrin 
+    using hexRef2D code for foam-extend 3.2 by Luca Cornolti
+
+Description
+    Refinement of (split) hexes into 4 using directTopoChange based
+    on Foam::hexRef8 class
+
+Comment (Luca Cornolti)
+    Functions called for un-refining follow the same logic of the related 3D case, 
+    but they employ the list of central edges instead of cell mid points, which do
+    not exist in 2D. For this reason, this part of the code is well implemented 
+    and could be included in a generalized Foam::hexRef8 class with little effort.
+    Functions called for refining were implemented following Ahmad Baniabedalruhman 
+    PhD Thesis with some significant modification.
+    They do their work fine, but in a quite dirty way and should be improved from 
+    a programming point of view.
+    Like in the Foam::hexRef8 class, there are probably some redundant loops check
+    which should be used just for debugging purpose and not for standard applications.
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef hexRef8_H
-#define hexRef8_H
+#ifndef hexRef2D_H
+#define hexRef2D_H
 
 #include "labelIOList.H"
 #include "face.H"
@@ -59,10 +76,10 @@ class mapPolyMesh;
 class mapDistributePolyMesh;
 
 /*---------------------------------------------------------------------------*\
-                           Class hexRef8 Declaration
+                           Class hexRef2D Declaration
 \*---------------------------------------------------------------------------*/
 
-class hexRef8
+class hexRef2D
 {
     // Private data
 
@@ -231,6 +248,7 @@ class hexRef8
             const labelListList& cellAnchorPoints,
             const labelListList& cellAddedCells,
             const labelList& cellMidPoint,
+            const labelList& faceMidPoint,
             const labelList& edgeMidPoint,
             const label celli,
             const label facei,
@@ -240,7 +258,6 @@ class hexRef8
             const label faceMidPointi,
 
             Map<edge>& midPointToAnchors,
-            Map<edge>& midPointToFaceMids,
             polyTopoChange& meshMod
         ) const;
 
@@ -256,12 +273,11 @@ class hexRef8
             const label facei,
 
             Map<edge>& midPointToAnchors,
-            Map<edge>& midPointToFaceMids,
             polyTopoChange& meshMod,
             label& nFacesAdded
         ) const;
 
-        //- Create all internal faces to split celli into 8.
+        //- Create all internal faces to split celli into 4.
         void createInternalFaces
         (
             const labelListList& cellAnchorPoints,
@@ -337,16 +353,16 @@ class hexRef8
 
 
         //- Disallow default bitwise copy construct
-        hexRef8(const hexRef8&);
+        hexRef2D(const hexRef2D&);
 
         //- Disallow default bitwise assignment
-        void operator=(const hexRef8&);
+        void operator=(const hexRef2D&);
 
 
 public:
 
     //- Runtime type information
-    ClassName("hexRef8");
+    ClassName("hexRef2D");
 
 
     // Constructors
@@ -354,11 +370,11 @@ public:
         //- Construct from mesh, read_if_present refinement data
         //  (from write below). If readHistory is true does read_if_present
         //  of refinement history. If false clears all history
-        hexRef8(const polyMesh& mesh, const bool readHistory = true);
+        hexRef2D(const polyMesh& mesh, const bool readHistory = true);
 
         //- Construct from mesh and un/refinement data and optional size of
         //  starting cells
-        hexRef8
+        hexRef2D
         (
             const polyMesh& mesh,
             const labelList& cellLevel,
@@ -369,7 +385,7 @@ public:
 
         //- Construct from mesh and refinement data and optional size of
         //  starting cells
-        hexRef8
+        hexRef2D
         (
             const polyMesh& mesh,
             const labelList& cellLevel,
@@ -430,7 +446,7 @@ public:
             //    (consistentRefinement equivalent to 1)
             //  - specify max level difference between point-connected cells.
             //    (-1 to disable) Note that with normal 2:1 limitation
-            //    (maxFaceDiff=1) there can be 8:1 size difference across point
+            //    (maxFaceDiff=1) there can be 4:1 size difference across point
             //    connected cells so maxPointDiff allows you to make that less.
             //  cellsToRefine : cells we're thinking about refining. It will
             //                  extend this set. All refinement levels will be
@@ -445,7 +461,7 @@ public:
                 const labelList& facesToCheck,
                 const label maxPointDiff,
                 const labelList& pointsToCheck
-            ) const;
+            );
 
             //- Like consistentSlowRefinement but uses different meshWave
             //  (proper distance instead of toplogical count). No point checks
@@ -457,8 +473,8 @@ public:
                 const labelList& facesToCheck
             ) const;
 
-            //- Insert refinement. All selected cells will be split into 8.
-            //  Returns per element in cells the 8 cells they were split into.
+            //- Insert refinement. All selected cells will be split into 4.
+            //  Returns per element in cells the 4 cells they were split into.
             //  Guarantees that the 0th element is the original cell label.
             //  Mapping:
             //  -split cells: 7 new ones get added from original
@@ -535,28 +551,28 @@ public:
 
         // Unrefinement (undoing refinement, not arbitrary coarsening)
 
-            //- Return the points at the centre of top-level split cells
+            //- Return the edges at the centre of top-level split cells
             //  that can be unsplit.
-            labelList getSplitPoints() const;
+            labelList getSplitEdges() const;
 
             //- Given proposed
-            //  splitPoints to unrefine according to calculate any clashes
-            //  (due to 2:1) and return ok list of points to unrefine.
+            //  splitEdges to unrefine according to calculate any clashes
+            //  (due to 2:1) and return ok list of edges to unrefine.
             //  Either adds points to refine to set (maxSet = true) or
             //  removes points to refine (maxSet = false)
             labelList consistentUnrefinement
             (
-                const labelList& pointsToUnrefine,
+                const labelList& edgesToUnrefine,
                 const bool maxSet
             ) const;
 
             //- Remove some refinement. Needs to be supplied output of
             //  consistentUnrefinement. Only call if undoable set.
-            //  All 8 pointCells of a split point will be combined into
-            //  the lowest numbered cell of those 8.
+            //  All 4 edgeCells of a split edge will be combined into
+            //  the lowest numbered cell of those 4.
             void setUnrefinement
             (
-                const labelList& splitPointLabels,
+                const labelList& splitEdgeLabels,
                 polyTopoChange&
             );
 

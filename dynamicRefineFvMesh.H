@@ -22,7 +22,7 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::dynamicRefineFvMesh
+    Foam::dynamicRefineFvMesh2D
 
 Description
     A fvMesh with built-in refinement.
@@ -61,15 +61,23 @@ Description
 
 
 SourceFiles
-    dynamicRefineFvMesh.C
+    dynamicRefineFvMesh2D.C
+
+Author
+    Oleg Sutyrin
+    using original code for foam-extend 3.2 by Luca Cornolti
+
+Description
+    A fvMesh with built-in refinement for 2D configuration based on dynamicRefineFvMesh.
+    Determines which cells to refine/unrefine and does all in update().
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef dynamicRefineFvMesh_H
-#define dynamicRefineFvMesh_H
+#ifndef dynamicRefineFvMesh2D_H
+#define dynamicRefineFvMesh2D_H
 
 #include "dynamicFvMesh.H"
-#include "hexRef8.H"
+#include "hexRef2D.H"
 #include "PackedBoolList.H"
 #include "Switch.H"
 
@@ -79,17 +87,17 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-                     Class dynamicRefineFvMesh Declaration
+                     Class dynamicRefineFvMesh2D Declaration
 \*---------------------------------------------------------------------------*/
 
-class dynamicRefineFvMesh
+class dynamicRefineFvMesh2D
 :
     public dynamicFvMesh
 {
 protected:
 
         //- Mesh cutting engine
-        hexRef8 meshCutter_;
+        hexRef2D meshCutter_;
 
         //- Dump cellLevel for postprocessing
         Switch dumpLevel_;
@@ -168,8 +176,8 @@ protected:
                 const PackedBoolList& candidateCell
             ) const;
 
-            //- Select points that can be unrefined.
-            virtual labelList selectUnrefinePoints
+            //- Select edges that can be unrefined (2D case).
+            virtual labelList selectUnrefineEdges
             (
                 const scalar unrefineLevel,
                 const PackedBoolList& markedCell,
@@ -189,31 +197,31 @@ protected:
 private:
 
         //- Disallow default bitwise copy construct
-        dynamicRefineFvMesh(const dynamicRefineFvMesh&);
+        dynamicRefineFvMesh2D(const dynamicRefineFvMesh2D&);
 
         //- Disallow default bitwise assignment
-        void operator=(const dynamicRefineFvMesh&);
+        void operator=(const dynamicRefineFvMesh2D&);
 
 public:
 
     //- Runtime type information
-    TypeName("dynamicRefineFvMesh");
+    TypeName("dynamicRefineFvMesh2D");
 
 
     // Constructors
 
         //- Construct from IOobject
-        explicit dynamicRefineFvMesh(const IOobject& io);
+        explicit dynamicRefineFvMesh2D(const IOobject& io);
 
 
     //- Destructor
-    virtual ~dynamicRefineFvMesh();
+    virtual ~dynamicRefineFvMesh2D();
 
 
     // Member Functions
 
         //- Direct access to the refinement engine
-        const hexRef8& meshCutter() const
+        const hexRef2D& meshCutter() const
         {
             return meshCutter_;
         }
