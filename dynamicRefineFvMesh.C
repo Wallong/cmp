@@ -23,7 +23,7 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "dynamicRefineFvMesh.H"
+#include "dynamicRefineFvMesh2D.H"
 #include "addToRunTimeSelectionTable.H"
 #include "surfaceInterpolate.H"
 #include "volFields.H"
@@ -38,15 +38,15 @@ License
 
 namespace Foam
 {
-    defineTypeNameAndDebug(dynamicRefineFvMesh, 0);
-    addToRunTimeSelectionTable(dynamicFvMesh, dynamicRefineFvMesh, IOobject);
+    defineTypeNameAndDebug(dynamicRefineFvMesh2D, 0);
+    addToRunTimeSelectionTable(dynamicFvMesh, dynamicRefineFvMesh2D, IOobject);
 }
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 // the PackedBoolList::count method would probably be faster
 // since we are only checking for 'true' anyhow
-Foam::label Foam::dynamicRefineFvMesh::count
+Foam::label Foam::dynamicRefineFvMesh2D::count
 (
     const PackedBoolList& l,
     const unsigned int val
@@ -72,7 +72,7 @@ Foam::label Foam::dynamicRefineFvMesh::count
 }
 
 
-void Foam::dynamicRefineFvMesh::calculateProtectedCells
+void Foam::dynamicRefineFvMesh2D::calculateProtectedCells
 (
     PackedBoolList& unrefineableCell
 ) const
@@ -132,7 +132,7 @@ void Foam::dynamicRefineFvMesh::calculateProtectedCells
             }
         }
 
-        syncTools::syncFaceList(*this, seedFace, orEqOp<bool>());
+        syncTools::syncFaceList(*this, seedFace, orEqOp<bool>()); //OS: (... , false); in fe32
 
 
         // Extend unrefineableCell
@@ -178,7 +178,7 @@ void Foam::dynamicRefineFvMesh::calculateProtectedCells
 }
 
 
-void Foam::dynamicRefineFvMesh::readDict()
+void Foam::dynamicRefineFvMesh2D::readDict()
 {
     dictionary refineDict
     (
@@ -213,7 +213,7 @@ void Foam::dynamicRefineFvMesh::readDict()
 
 // Refines cells, maps fields and recalculates (an approximate) flux
 Foam::autoPtr<Foam::mapPolyMesh>
-Foam::dynamicRefineFvMesh::refine
+Foam::dynamicRefineFvMesh2D::refine
 (
     const labelList& cellsToRefine
 )
@@ -466,15 +466,15 @@ Foam::dynamicRefineFvMesh::refine
 // Combines previously split cells, maps fields and recalculates
 // (an approximate) flux
 Foam::autoPtr<Foam::mapPolyMesh>
-Foam::dynamicRefineFvMesh::unrefine
+Foam::dynamicRefineFvMesh2D::unrefine
 (
-    const labelList& splitPoints
+    const labelList& splitEdges
 )
 {
     polyTopoChange meshMod(*this);
 
     // Play refinement commands into mesh changer.
-    meshCutter_.setUnrefinement(splitPoints, meshMod);
+    meshCutter_.setUnrefinement(splitEdges, meshMod);
 
 
     // Save information on faces that will be combined
@@ -483,24 +483,24 @@ Foam::dynamicRefineFvMesh::unrefine
     // Find the faceMidPoints on cells to be combined.
     // for each face resulting of split of face into four store the
     // midpoint
-    Map<label> faceToSplitPoint(3*splitPoints.size());
+    Map<label> faceToSplitPoint(2*splitEdges.size());
 
     {
-        forAll(splitPoints, i)
+        forAll(splitEdges, i)
         {
-            label pointi = splitPoints[i];
+            label edgei = splitEdges[i];
 
-            const labelList& pEdges = pointEdges()[pointi];
+            const edge& e = edges()[edgei];
 
-            forAll(pEdges, j)
+            forAll(e, j)
             {
-                label otherPointi = edges()[pEdges[j]].otherVertex(pointi);
+                label pointi = e[j];
 
-                const labelList& pFaces = pointFaces()[otherPointi];
+                const labelList& pFaces = pointFaces()[pointi];
 
                 forAll(pFaces, pFacei)
                 {
-                    faceToSplitPoint.insert(pFaces[pFacei], otherPointi);
+                    faceToSplitPoint.insert(pFaces[pFacei], pointi);
                 }
             }
         }
@@ -648,7 +648,7 @@ Foam::dynamicRefineFvMesh::unrefine
 
 // Get max of connected point
 Foam::scalarField
-Foam::dynamicRefineFvMesh::maxPointField(const scalarField& pFld) const
+Foam::dynamicRefineFvMesh2D::maxPointField(const scalarField& pFld) const
 {
     scalarField vFld(nCells(), -GREAT);
 
@@ -667,7 +667,7 @@ Foam::dynamicRefineFvMesh::maxPointField(const scalarField& pFld) const
 
 // Get max of connected cell
 Foam::scalarField
-Foam::dynamicRefineFvMesh::maxCellField(const volScalarField& vFld) const
+Foam::dynamicRefineFvMesh2D::maxCellField(const volScalarField& vFld) const
 {
     scalarField pFld(nPoints(), -GREAT);
 
@@ -686,7 +686,7 @@ Foam::dynamicRefineFvMesh::maxCellField(const volScalarField& vFld) const
 
 // Simple (non-parallel) interpolation by averaging.
 Foam::scalarField
-Foam::dynamicRefineFvMesh::cellToPoint(const scalarField& vFld) const
+Foam::dynamicRefineFvMesh2D::cellToPoint(const scalarField& vFld) const
 {
     scalarField pFld(nPoints());
 
@@ -706,7 +706,7 @@ Foam::dynamicRefineFvMesh::cellToPoint(const scalarField& vFld) const
 
 
 // Calculate error. Is < 0 or distance to minLevel, maxLevel
-Foam::scalarField Foam::dynamicRefineFvMesh::error
+Foam::scalarField Foam::dynamicRefineFvMesh2D::error
 (
     const scalarField& fld,
     const scalar minLevel,
@@ -728,7 +728,7 @@ Foam::scalarField Foam::dynamicRefineFvMesh::error
 }
 
 
-void Foam::dynamicRefineFvMesh::selectRefineCandidates
+void Foam::dynamicRefineFvMesh2D::selectRefineCandidates
 (
     const scalar lowerRefineLevel,
     const scalar upperRefineLevel,
@@ -762,15 +762,15 @@ void Foam::dynamicRefineFvMesh::selectRefineCandidates
 }
 
 
-Foam::labelList Foam::dynamicRefineFvMesh::selectRefineCells
+Foam::labelList Foam::dynamicRefineFvMesh2D::selectRefineCells
 (
     const label maxCells,
     const label maxRefinement,
     const PackedBoolList& candidateCell
 ) const
 {
-    // Every refined cell causes 7 extra cells
-    label nTotToRefine = (maxCells - globalData().nTotalCells()) / 7;
+    // Every refined cell causes 3 extra cells
+    label nTotToRefine = (maxCells - globalData().nTotalCells()) / 3;
 
     const labelList& cellLevel = meshCutter_.cellLevel();
 
@@ -850,7 +850,7 @@ Foam::labelList Foam::dynamicRefineFvMesh::selectRefineCells
 }
 
 
-Foam::labelList Foam::dynamicRefineFvMesh::selectUnrefinePoints
+Foam::labelList Foam::dynamicRefineFvMesh2D::selectUnrefineEdges
 (
     const scalar unrefineLevel,
     const PackedBoolList& markedCell,
@@ -858,59 +858,74 @@ Foam::labelList Foam::dynamicRefineFvMesh::selectUnrefinePoints
 ) const
 {
     // All points that can be unrefined
-    const labelList splitPoints(meshCutter_.getSplitPoints());
+    const labelList splitEdges(meshCutter_.getSplitEdges());
 
-    DynamicList<label> newSplitPoints(splitPoints.size());
+    DynamicList<label> newSplitEdges(splitEdges.size());
 
-    forAll(splitPoints, i)
+    forAll(splitEdges, j)
     {
-        label pointi = splitPoints[i];
+        label edgej = splitEdges[j];
 
-        if (pFld[pointi] < unrefineLevel)
+        const edge& e = edges()[edgej];
+
+        forAll(e, i)
         {
-            // Check that all cells are not marked
-            const labelList& pCells = pointCells()[pointi];
+            label pointi = e[i];
 
-            bool hasMarked = false;
+            bool hasMarked = true;
 
-            forAll(pCells, pCelli)
+            // Whas is the meaning of unrefineLevel?
+            // Does it makes sense to compare it with 
+            // the field value instead of the cell level as the name suggests?
+            if (pFld[pointi] < unrefineLevel)
             {
-                if (markedCell.get(pCells[pCelli]))
+                hasMarked = false;
+
+                // Check that all cells are not marked
+                const labelList& pCells = pointCells()[pointi];
+
+
+
+                forAll(pCells, pCelli)
                 {
-                    hasMarked = true;
-                    break;
+                    if (markedCell.get(pCells[pCelli]) == 1)
+                    {
+                        hasMarked = true;
+                        break;
+                    }
                 }
             }
 
             if (!hasMarked)
             {
-                newSplitPoints.append(pointi);
+                newSplitEdges.append(edgej);
+                break;
             }
         }
     }
 
 
-    newSplitPoints.shrink();
+    newSplitEdges.shrink();
 
     // Guarantee 2:1 refinement after unrefinement
     labelList consistentSet
     (
         meshCutter_.consistentUnrefinement
         (
-            newSplitPoints,
+            newSplitEdges,
             false
         )
     );
     Info<< "Selected " << returnReduce(consistentSet.size(), sumOp<label>())
-        << " split points out of a possible "
-        << returnReduce(splitPoints.size(), sumOp<label>())
+        << " split edges out of a possible "
+        << returnReduce(splitEdges.size(), sumOp<label>())
         << "." << endl;
 
     return consistentSet;
 }
 
 
-void Foam::dynamicRefineFvMesh::extendMarkedCells
+void Foam::dynamicRefineFvMesh2D::extendMarkedCells
 (
     PackedBoolList& markedCell
 ) const
@@ -951,8 +966,8 @@ void Foam::dynamicRefineFvMesh::extendMarkedCells
     }
 }
 
-
-void Foam::dynamicRefineFvMesh::checkEightAnchorPoints
+//OS: not present in fe32 (need to convert into 4 anchor points?)
+void Foam::dynamicRefineFvMesh2D::checkEightAnchorPoints
 (
     PackedBoolList& protectedCell,
     label& nProtected
@@ -1004,7 +1019,7 @@ void Foam::dynamicRefineFvMesh::checkEightAnchorPoints
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::dynamicRefineFvMesh::dynamicRefineFvMesh(const IOobject& io)
+Foam::dynamicRefineFvMesh2D::dynamicRefineFvMesh2D(const IOobject& io)
 :
     dynamicFvMesh(io),
     meshCutter_(*this),
@@ -1186,13 +1201,13 @@ Foam::dynamicRefineFvMesh::dynamicRefineFvMesh(const IOobject& io)
 
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
 
-Foam::dynamicRefineFvMesh::~dynamicRefineFvMesh()
+Foam::dynamicRefineFvMesh2D::~dynamicRefineFvMesh2D()
 {}
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-bool Foam::dynamicRefineFvMesh::update()
+bool Foam::dynamicRefineFvMesh2D::update()
 {
     // Re-read dictionary. Choosen since usually -small so trivial amount
     // of time compared to actual refinement. Also very useful to be able
@@ -1237,7 +1252,6 @@ bool Foam::dynamicRefineFvMesh::update()
 
     // Note: cannot refine at time 0 since no V0 present since mesh not
     //       moved yet.
-
     if (time().timeIndex() > 0 && time().timeIndex() % refineInterval == 0)
     {
         label maxCells = readLabel(refineDict.lookup("maxCells"));
@@ -1277,11 +1291,14 @@ bool Foam::dynamicRefineFvMesh::update()
         );
         const label nBufferLayers =
             readLabel(refineDict.lookup("nBufferLayers"));
+        const label nBufferLayersR =
+            readLabel(refineDict.lookup("nBufferLayersR"));
 
         // Cells marked for refinement or otherwise protected from unrefinement.
         PackedBoolList refineCell(nCells());
 
         // Determine candidates for refinement (looking at field only)
+        //OS: this line is inside 'if' below in fe32
         selectRefineCandidates
         (
             lowerRefineLevel,
@@ -1292,6 +1309,11 @@ bool Foam::dynamicRefineFvMesh::update()
 
         if (globalData().nTotalCells() < maxCells)
         {
+
+            for (label i = 0; i < nBufferLayersR; i++)
+            {
+                extendMarkedCells(refineCell);
+            }
             // Select subset of candidates. Take into account max allowable
             // cells, refinement level, protected cells.
             labelList cellsToRefine
@@ -1355,10 +1377,10 @@ bool Foam::dynamicRefineFvMesh::update()
 
 
         {
-            // Select unrefineable points that are not marked in refineCell
-            labelList pointsToUnrefine
+            // Select unrefineable edges that are not marked in refineCell
+            labelList edgesToUnrefine
             (
-                selectUnrefinePoints
+                selectUnrefineEdges
                 (
                     unrefineLevel,
                     refineCell,
@@ -1366,16 +1388,16 @@ bool Foam::dynamicRefineFvMesh::update()
                 )
             );
 
-            label nSplitPoints = returnReduce
+            label nSplitEdges = returnReduce
             (
-                pointsToUnrefine.size(),
+                edgesToUnrefine.size(),
                 sumOp<label>()
             );
 
-            if (nSplitPoints > 0)
+            if (nSplitEdges > 0)
             {
                 // Refine/update mesh
-                unrefine(pointsToUnrefine);
+                unrefine(edgesToUnrefine);
 
                 hasChanged = true;
             }
@@ -1403,7 +1425,7 @@ bool Foam::dynamicRefineFvMesh::update()
 }
 
 
-bool Foam::dynamicRefineFvMesh::writeObject
+bool Foam::dynamicRefineFvMesh2D::writeObject
 (
     IOstream::streamFormat fmt,
     IOstream::versionNumber ver,
@@ -1411,7 +1433,7 @@ bool Foam::dynamicRefineFvMesh::writeObject
 ) const
 {
     // Force refinement data to go to the current time directory.
-    const_cast<hexRef8&>(meshCutter_).setInstance(time().timeName());
+    const_cast<hexRef2D&>(meshCutter_).setInstance(time().timeName());
 
     bool writeOk =
     (
